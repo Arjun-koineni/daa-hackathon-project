@@ -46,7 +46,7 @@ Open **[http://localhost:8000](http://localhost:8000)** in any browser.
 
 ## 📊 Complexity Analysis
 
-- **Time Complexity**: $\mathcal{O}(n + m \log m + q \cdot n)$
+- **Time Complexity**: $\mathcal{O}(n + m \log n + q \cdot n)$
   - *Adjacency Sorting*: Sorting neighbor lists for each vertex takes $\mathcal{O}(\sum \text{deg}(v) \log \text{deg}(v)) = \mathcal{O}(m \log (\max \text{deg})) \subseteq \mathcal{O}(m \log m)$.
   - *Graph Traversals*: Recursive DFS component labeling, source DFS, and queue BFS each visit each vertex and traverse each edge once: $\mathcal{O}(n + m)$.
   - *Path Reconstruction*: Backtracking through `parent[]` for $q$ targets takes $\mathcal{O}(d) \le \mathcal{O}(n)$ per target, giving $\mathcal{O}(q \cdot n)$ total.
