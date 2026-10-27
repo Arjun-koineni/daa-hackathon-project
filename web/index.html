@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Campus Emergency Route Audit | Interactive Visualizer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="dark-theme">
+  <header class="app-header">
+    <div class="logo-group">
+      <div class="logo-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/>
+          <path d="m4.93 4.93 4.24 4.24M14.83 14.83l4.24 4.24M14.83 9.17l4.24-4.24M4.93 19.07l4.24-4.24"/>
+          <circle cx="12" cy="12" r="4" fill="currentColor"/>
+        </svg>
+      </div>
+      <div>
+        <h1 class="app-title">Campus Emergency Route Audit</h1>
+        <p class="app-subtitle">DAA Sem #3 Reachability & Traversal Visualizer</p>
+      </div>
+    </div>
+    <div class="header-status">
+      <span class="status-pill active" id="serverStatus"><span class="dot"></span> Localhost Active</span>
+      <span class="badge">n &le; 200</span>
+    </div>
+  </header>
+
+  <main class="main-layout">
+    <!-- Left Sidebar: Controls & Input -->
+    <aside class="sidebar-panel">
+      <!-- Preset and Input Selection -->
+      <section class="card input-card">
+        <div class="card-header">
+          <div class="card-title-wrap">
+            <span class="icon">⚙️</span>
+            <h2>Test Configuration</h2>
+          </div>
+          <select id="presetSelect" class="preset-dropdown">
+            <option value="">Choose Preset...</option>
+          </select>
+        </div>
+        
+        <div class="textarea-wrapper">
+          <textarea id="rawInput" spellcheck="false" placeholder="Enter graph input:&#10;n m&#10;u v (m lines)&#10;s q&#10;targets (q lines)"></textarea>
+        </div>
+
+        <div class="button-row">
+          <button id="runAuditBtn" class="btn btn-primary">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+            Run Audit
+          </button>
+          <button id="resetViewBtn" class="btn btn-secondary">Reset Canvas</button>
+        </div>
+      </section>
+
+      <!-- Campus Overview Metrics -->
+      <section class="card metrics-card">
+        <div class="card-header">
+          <div class="card-title-wrap">
+            <span class="icon">📊</span>
+            <h2>Graph Metrics</h2>
+          </div>
+        </div>
+        <div class="metrics-grid">
+          <div class="metric-item">
+            <span class="metric-label">Vertices (n)</span>
+            <span class="metric-val" id="metricN">-</span>
+          </div>
+          <div class="metric-item">
+            <span class="metric-label">Edges (m)</span>
+            <span class="metric-val" id="metricM">-</span>
+          </div>
+          <div class="metric-item">
+            <span class="metric-label">Components</span>
+            <span class="metric-val highlight-cyan" id="metricComponents">-</span>
+          </div>
+          <div class="metric-item">
+            <span class="metric-label">Source Depot (s)</span>
+            <span class="metric-val highlight-amber" id="metricSource">-</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Emergency Routes Audited -->
+      <section class="card routes-card">
+        <div class="card-header">
+          <div class="card-title-wrap">
+            <span class="icon">🚨</span>
+            <h2>Emergency Routes (q=<span id="metricQ">0</span>)</h2>
+          </div>
+          <span class="sub-hint">Click route to inspect</span>
+        </div>
+        <div class="routes-list" id="routesList">
+          <div class="empty-state">Run an audit to view emergency routes.</div>
+        </div>
+      </section>
+    </aside>
+
+    <!-- Center Stage: Canvas & Controls -->
+    <section class="canvas-section">
+      <!-- Traversal Controls Bar -->
+      <div class="traversal-controller">
+        <div class="algorithm-switch">
+          <button class="switch-btn active" id="modeDfsBtn">DFS Traversal</button>
+          <button class="switch-btn" id="modeBfsBtn">BFS Traversal</button>
+          <button class="switch-btn" id="modeStaticBtn">Static Overview</button>
+        </div>
+
+        <div class="playback-controls" id="playbackControls">
+          <button class="ctrl-btn" id="stepPrevBtn" title="Previous Step">⏮</button>
+          <button class="ctrl-btn play-btn" id="playPauseBtn" title="Play / Pause">▶</button>
+          <button class="ctrl-btn" id="stepNextBtn" title="Next Step">⏭</button>
+          <button class="ctrl-btn" id="resetAnimBtn" title="Reset Animation">↺</button>
+          
+          <div class="speed-slider-wrap">
+            <label for="speedRange">Speed:</label>
+            <input type="range" id="speedRange" min="1" max="10" value="5">
+          </div>
+        </div>
+      </div>
+
+      <!-- Step Live Explanation -->
+      <div class="step-banner" id="stepBanner">
+        <span class="step-badge" id="stepBadge">Ready</span>
+        <span class="step-desc" id="stepMessage">Audit loaded. Click Play to step through the graph traversal!</span>
+      </div>
+
+      <!-- Graph Visualizer Area -->
+      <div class="graph-viewport" id="graphViewport">
+        <canvas id="graphCanvas"></canvas>
+        <div class="canvas-legend">
+          <div class="legend-item"><span class="legend-color legend-source"></span> Source (s)</div>
+          <div class="legend-item"><span class="legend-color legend-target"></span> Target (t)</div>
+          <div class="legend-item"><span class="legend-color legend-active"></span> Current Visit</div>
+          <div class="legend-item"><span class="legend-color legend-route"></span> Shortest Route</div>
+        </div>
+        <div class="canvas-overlay-hint">Scroll to Zoom • Drag to Pan / Move Vertices</div>
+      </div>
+
+      <!-- Bottom Tabs: Official Stdout & Rules -->
+      <div class="bottom-panel card">
+        <div class="tab-headers">
+          <button class="tab-btn active" data-tab="stdoutTab">Exact Terminal Output (problem02_campus_audit.py)</button>
+          <button class="tab-btn" data-tab="explanationTab">Algorithm & Tie-Breaking Rules</button>
+        </div>
+
+        <div class="tab-contents">
+          <!-- Stdout Output tab -->
+          <div class="tab-content active" id="stdoutTab">
+            <div class="code-header">
+              <span class="code-title">stdout (Standard Output)</span>
+              <button class="btn btn-small" id="copyStdoutBtn">Copy Output</button>
+            </div>
+            <pre class="stdout-box" id="stdoutContent">Run an audit to view standard output.</pre>
+          </div>
+
+          <!-- Explanation tab -->
+          <div class="tab-content" id="explanationTab">
+            <div class="explanation-grid">
+              <div class="explain-item">
+                <h3>1. Component Partitioning</h3>
+                <p>Recursive DFS starts from vertex <code>0..n-1</code> if unvisited. All reachable vertices receive the root label <code>v</code>. Component count equals the number of DFS launches.</p>
+              </div>
+              <div class="explain-item">
+                <h3>2. Ascending Neighbor Tie-Breaking</h3>
+                <p>Every adjacency list is sorted ascending before any exploration. This guarantees determinism in recursive DFS order and BFS discovery queues.</p>
+              </div>
+              <div class="explain-item">
+                <h3>3. BFS Mark on Enqueue</h3>
+                <p>Vertices are marked and their distance and parent set immediately upon <strong>enqueueing</strong>, ensuring shortest paths and preventing duplicate entries.</p>
+              </div>
+              <div class="explain-item">
+                <h3>4. Route Backtracking</h3>
+                <p>Routes are reconstructed by following the <code>parent[]</code> pointers back from target <code>t</code> to source <code>s</code> and reversing the path list.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
