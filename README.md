@@ -35,8 +35,10 @@ python problem02_campus_audit.py < tests/Sample1.in
 ```
 *(On Windows PowerShell: `Get-Content tests\Sample1.in | python problem02_campus_audit.py`)*
 
-### 3. (Bonus) Launch Localhost Interactive Visualizer
-To interactively visualize the graph, animate DFS/BFS step-by-step, and inspect emergency routes in your browser:
+### 3. (Bonus) Interactive Visualizer
+
+- **Live Deployment**: Access the web visualizer instantly on Vercel at **[https://campus-route-audit.vercel.app](https://campus-route-audit.vercel.app)**.
+- **Local Server**: Alternatively, run locally:
 ```bash
 python visualizer.py
 ```

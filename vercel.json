@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    { "source": "/api/samples", "destination": "/web/samples.json" },
+    { "source": "/web/(.*)", "destination": "/web/$1" },
+    { "source": "/", "destination": "/web/" },
+    { "source": "/(.*)", "destination": "/web/$1" }
+  ]
+}

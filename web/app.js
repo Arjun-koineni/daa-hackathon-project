@@ -42,33 +42,287 @@ const metricComponents = document.getElementById('metricComponents');
 const metricSource = document.getElementById('metricSource');
 const metricQ = document.getElementById('metricQ');
 
-// Fetch presets from server
-async function loadPresets() {
+const DEFAULT_PRESETS = [
+  {
+    name: 'Sample1',
+    data: '6 5\n0 2\n0 1\n1 3\n2 3\n4 5\n0 3\n3\n5\n0\n'
+  },
+  {
+    name: 'Sample2',
+    data: '3 0\n1 2\n1\n0\n'
+  },
+  {
+    name: 'single_vertex',
+    data: '1 0\n0 1\n0\n'
+  },
+  {
+    name: 'source_not_smallest',
+    data: '5 3\n0 1\n2 3\n3 4\n2 4\n4\n0\n1\n2\n'
+  },
+  {
+    name: 'tie_shortest_route',
+    data: '4 4\n0 1\n0 2\n1 3\n2 3\n0 2\n3\n2\n'
+  }
+];
+
+// Client-Side Graph Solver Engine (100% compliant with problem02_campus_audit.py)
+function solveCampusAuditClient(raw_input_text) {
+  const tokens = raw_input_text.trim().split(/\s+/);
+  if (!tokens || tokens.length < 2 || tokens[0] === '') {
+    return { error: 'Input is too short or empty.' };
+  }
+
   try {
-    const res = await fetch('/api/samples');
-    if (!res.ok) return;
-    const samples = await res.json();
-    presetSelect.innerHTML = '<option value="">Choose Preset...</option>';
-    samples.forEach(s => {
-      const opt = document.createElement('option');
-      opt.value = s.data;
-      opt.textContent = s.name;
-      presetSelect.appendChild(opt);
+    const n = parseInt(tokens[0], 10);
+    const m = parseInt(tokens[1], 10);
+    let idx = 2;
+    const edges = [];
+    const adj = Array.from({ length: n }, () => []);
+
+    for (let i = 0; i < m; i++) {
+      if (idx + 1 >= tokens.length) break;
+      const u = parseInt(tokens[idx], 10);
+      const v = parseInt(tokens[idx + 1], 10);
+      edges.push([u, v]);
+      adj[u].push(v);
+      adj[v].push(u);
+      idx += 2;
+    }
+
+    const s = parseInt(tokens[idx], 10);
+    const q = parseInt(tokens[idx + 1], 10);
+    idx += 2;
+
+    const targets = [];
+    for (let i = 0; i < q; i++) {
+      targets.push(parseInt(tokens[idx + i], 10));
+    }
+
+    // Sort adjacency lists ascending
+    for (let u = 0; u < n; u++) {
+      adj[u].sort((a, b) => a - b);
+    }
+
+    // 1. Connected components
+    const component_label = new Array(n).fill(-1);
+    let num_components = 0;
+
+    function comp_dfs(u, label) {
+      component_label[u] = label;
+      for (const v of adj[u]) {
+        if (component_label[v] === -1) {
+          comp_dfs(v, label);
+        }
+      }
+    }
+
+    for (let i = 0; i < n; i++) {
+      if (component_label[i] === -1) {
+        num_components++;
+        comp_dfs(i, i);
+      }
+    }
+
+    // 2. DFS traversal step-by-step
+    const dfs_visited = new Array(n).fill(false);
+    const dfs_order = [];
+    const dfs_steps = [];
+
+    function dfs(u, p) {
+      dfs_visited[u] = true;
+      dfs_order.push(u);
+      dfs_steps.push({
+        type: 'visit',
+        vertex: u,
+        from: p,
+        visited: dfs_visited.map((v, i) => v ? i : null).filter(x => x !== null),
+        traversal: [...dfs_order],
+        message: (p === null ? `Start DFS at source vertex ${u}` : `DFS entered vertex ${u} from neighbor ${p}`)
+      });
+
+      for (const v of adj[u]) {
+        if (!dfs_visited[v]) {
+          dfs(v, u);
+        } else {
+          dfs_steps.push({
+            type: 'check_visited',
+            vertex: v,
+            from: u,
+            visited: dfs_visited.map((val, i) => val ? i : null).filter(x => x !== null),
+            traversal: [...dfs_order],
+            message: `Neighbor ${v} of vertex ${u} is already visited. Skipping.`
+          });
+        }
+      }
+    }
+
+    dfs(s, null);
+
+    // 3. BFS traversal step-by-step
+    const dist = new Array(n).fill(-1);
+    const parent = new Array(n).fill(-1);
+    const bfs_order = [];
+    const bfs_steps = [];
+
+    dist[s] = 0;
+    parent[s] = s;
+    const queue = [s];
+
+    bfs_steps.push({
+      type: 'enqueue',
+      vertex: s,
+      from: null,
+      dist: [...dist],
+      parent: [...parent],
+      queue: [...queue],
+      traversal: [...bfs_order],
+      message: `Enqueue source vertex ${s} (distance 0)`
     });
 
-    // Default to Sample1 if available
-    const sample1 = samples.find(s => s.name.toLowerCase().includes('sample1'));
-    if (sample1) {
-      rawInput.value = sample1.data;
-      presetSelect.value = sample1.data;
-      runAudit();
-    } else if (samples.length > 0) {
-      rawInput.value = samples[0].data;
-      presetSelect.value = samples[0].data;
-      runAudit();
+    while (queue.length > 0) {
+      const u = queue.shift();
+      bfs_order.push(u);
+      bfs_steps.push({
+        type: 'dequeue',
+        vertex: u,
+        from: (u !== s ? parent[u] : null),
+        dist: [...dist],
+        parent: [...parent],
+        queue: [...queue],
+        traversal: [...bfs_order],
+        message: `Dequeued vertex ${u} (distance ${dist[u]})`
+      });
+
+      for (const v of adj[u]) {
+        if (dist[v] === -1) {
+          dist[v] = dist[u] + 1;
+          parent[v] = u;
+          queue.push(v);
+          bfs_steps.push({
+            type: 'enqueue',
+            vertex: v,
+            from: u,
+            dist: [...dist],
+            parent: [...parent],
+            queue: [...queue],
+            traversal: [...bfs_order],
+            message: `Discovered unvisited neighbor ${v} from ${u}. Set distance=${dist[v]}, parent=${u}, and enqueue.`
+          });
+        } else {
+          bfs_steps.push({
+            type: 'already_marked',
+            vertex: v,
+            from: u,
+            dist: [...dist],
+            parent: [...parent],
+            queue: [...queue],
+            traversal: [...bfs_order],
+            message: `Neighbor ${v} already discovered (distance=${dist[v]}). Skipping enqueue.`
+          });
+        }
+      }
+    }
+
+    // Reconstruct routes
+    const routes = [];
+    const stdoutLines = [];
+    stdoutLines.push(`COMPONENTS ${num_components}`);
+    stdoutLines.push(`LABELS ${component_label.join(' ')}`);
+    stdoutLines.push(`DFS ${dfs_order.join(' ')}`);
+    stdoutLines.push(`BFS ${bfs_order.join(' ')}`);
+
+    for (const t of targets) {
+      if (dist[t] === -1) {
+        routes.push({ target: t, reachable: false, distance: -1, path: [] });
+        stdoutLines.push(`ROUTE ${t} UNREACHABLE`);
+      } else {
+        const path = [];
+        let curr = t;
+        while (curr !== s) {
+          path.push(curr);
+          curr = parent[curr];
+        }
+        path.push(s);
+        path.reverse();
+        routes.push({ target: t, reachable: true, distance: dist[t], path });
+        stdoutLines.push(`ROUTE ${t} ${dist[t]} ${path.join(' ')}`);
+      }
+    }
+
+    const raw_stdout = stdoutLines.join('\n') + '\n';
+
+    return {
+      n,
+      m,
+      edges,
+      source: s,
+      q,
+      targets,
+      components: {
+        count: num_components,
+        labels: component_label
+      },
+      dfs: {
+        order: dfs_order,
+        steps: dfs_steps
+      },
+      bfs: {
+        order: bfs_order,
+        dist,
+        parent,
+        steps: bfs_steps
+      },
+      routes,
+      raw_stdout
+    };
+  } catch (e) {
+    return { error: 'Failed to parse input: ' + e.message };
+  }
+}
+
+// Fetch presets from server with fallback
+async function loadPresets() {
+  let samples = [];
+  try {
+    const res = await fetch('/api/samples');
+    if (res.ok) {
+      samples = await res.json();
     }
   } catch (err) {
-    console.error('Error loading presets:', err);
+    // API not found or network error
+  }
+
+  if (!samples || samples.length === 0) {
+    try {
+      const res = await fetch('samples.json');
+      if (res.ok) {
+        samples = await res.json();
+      }
+    } catch (e) {}
+  }
+
+  if (!samples || samples.length === 0) {
+    samples = DEFAULT_PRESETS;
+  }
+
+  presetSelect.innerHTML = '<option value="">Choose Preset...</option>';
+  samples.forEach(s => {
+    const opt = document.createElement('option');
+    opt.value = s.data;
+    opt.textContent = s.name;
+    presetSelect.appendChild(opt);
+  });
+
+  // Default to Sample1 if available
+  const sample1 = samples.find(s => s.name.toLowerCase().includes('sample1'));
+  if (sample1) {
+    rawInput.value = sample1.data;
+    presetSelect.value = sample1.data;
+    runAudit();
+  } else if (samples.length > 0) {
+    rawInput.value = samples[0].data;
+    presetSelect.value = samples[0].data;
+    runAudit();
   }
 }
 
@@ -79,38 +333,57 @@ presetSelect.addEventListener('change', () => {
   }
 });
 
-// Run Audit via API
+// Run Audit via API with fallback to Client Engine
 async function runAudit() {
   const inputText = rawInput.value.trim();
   if (!inputText) return;
 
   pauseAnimation();
 
+  let data = null;
+  const statusPill = document.getElementById('serverStatus');
+
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 2000);
     const res = await fetch('/api/audit', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ input: inputText })
+      body: JSON.stringify({ input: inputText }),
+      signal: controller.signal
     });
-    const data = await res.json();
-
-    if (data.error) {
-      alert('Audit error: ' + data.error);
-      return;
+    clearTimeout(timeoutId);
+    if (res.ok) {
+      data = await res.json();
+      if (statusPill) {
+        statusPill.innerHTML = '<span class="dot"></span> Local Server Active';
+      }
     }
-
-    graphData = data;
-    selectedRouteTarget = null;
-    currentStepIdx = 0;
-
-    updateMetrics();
-    updateRoutesList();
-    stdoutContent.textContent = data.raw_stdout || 'No output.';
-    initNodeLayout();
-    updateStepView();
   } catch (err) {
-    console.error('Failed to run audit:', err);
+    // Falls back to client-side
   }
+
+  if (!data || data.error) {
+    data = solveCampusAuditClient(inputText);
+    if (statusPill) {
+      statusPill.innerHTML = '<span class="dot"></span> Client Engine Active';
+    }
+  }
+
+  if (data.error) {
+    alert('Audit error: ' + data.error);
+    return;
+  }
+
+  graphData = data;
+  selectedRouteTarget = null;
+  currentStepIdx = 0;
+
+  updateMetrics();
+  updateRoutesList();
+  stdoutContent.textContent = data.raw_stdout || 'No output.';
+  initNodeLayout();
+  updateStepView();
 }
 
 runAuditBtn.addEventListener('click', runAudit);
