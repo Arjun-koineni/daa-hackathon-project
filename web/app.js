@@ -479,16 +479,30 @@ function initNodeLayout() {
   nodePositions = {};
   compKeys.forEach((key, compIndex) => {
     const compNodes = componentsMap[key];
-    // Center for this component
-    const angle = (compIndex / compCount) * 2 * Math.PI;
-    const compRadius = compCount === 1 ? 0 : Math.min(width, height) * 0.25;
-    const cX = centerX + Math.cos(angle) * compRadius;
-    const cY = centerY + Math.sin(angle) * compRadius;
+    let cX, cY;
+
+    if (compCount === 1) {
+      cX = centerX;
+      cY = centerY;
+    } else if (compCount === 2) {
+      // Clean horizontal split for 2 disconnected components
+      const offsetX = Math.min(width * 0.26, 240);
+      cX = compIndex === 0 ? centerX + offsetX : centerX - offsetX;
+      cY = centerY;
+    } else {
+      // Radial distribution with generous radius to prevent overlap
+      const angle = (compIndex / compCount) * 2 * Math.PI;
+      const compRadius = Math.min(width, height) * 0.35;
+      cX = centerX + Math.cos(angle) * compRadius;
+      cY = centerY + Math.sin(angle) * compRadius;
+    }
 
     // Distribute nodes in a circle around component center
-    const nodeRadius = compNodes.length === 1 ? 0 : Math.min(120, 30 + compNodes.length * 15);
+    const nodeRadius = compNodes.length === 1 ? 0 : Math.min(95, 35 + compNodes.length * 12);
     compNodes.forEach((nodeId, idx) => {
-      const nodeAngle = (idx / compNodes.length) * 2 * Math.PI;
+      // Offset starting angle so neighboring component vertices don't face each other
+      const angleOffset = compCount === 2 && compIndex === 0 ? Math.PI : 0;
+      const nodeAngle = angleOffset + (idx / compNodes.length) * 2 * Math.PI;
       nodePositions[nodeId] = {
         x: cX + Math.cos(nodeAngle) * nodeRadius,
         y: cY + Math.sin(nodeAngle) * nodeRadius,
@@ -571,6 +585,59 @@ function drawGraph() {
         routeEdges.add(`${Math.min(u, v)}-${Math.max(u, v)}`);
       }
     }
+  }
+
+  // 0. Draw Component Islands (Subtle boundaries for disconnected clusters)
+  if (graphData.components.count > 1) {
+    const compMap = {};
+    for (let i = 0; i < graphData.n; i++) {
+      const label = graphData.components.labels[i];
+      if (!compMap[label]) compMap[label] = [];
+      compMap[label].push(i);
+    }
+
+    Object.keys(compMap).forEach(labelKey => {
+      const nodes = compMap[labelKey];
+      if (!nodes || nodes.length === 0) return;
+
+      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+      nodes.forEach(id => {
+        const p = nodePositions[id];
+        if (p) {
+          minX = Math.min(minX, p.x);
+          maxX = Math.max(maxX, p.x);
+          minY = Math.min(minY, p.y);
+          maxY = Math.max(maxY, p.y);
+        }
+      });
+
+      if (minX !== Infinity) {
+        const pad = 38;
+        const cX = (minX + maxX) / 2;
+        const cY = (minY + maxY) / 2;
+        const r = Math.max((maxX - minX) / 2, (maxY - minY) / 2) + pad;
+        const labelNum = parseInt(labelKey, 10);
+        const compColor = getComponentColor(labelNum);
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(cX, cY, r, 0, 2 * Math.PI);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.025)';
+        ctx.fill();
+        ctx.strokeStyle = compColor;
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([4, 6]);
+        ctx.stroke();
+
+        // Island Header
+        ctx.setLineDash([]);
+        ctx.font = '600 11px Inter, sans-serif';
+        ctx.fillStyle = compColor;
+        ctx.textAlign = 'center';
+        ctx.fillText(`Connected Component (Label ${labelNum})`, cX, cY - r - 8);
+        ctx.restore();
+      }
+    });
   }
 
   // 1. Draw Edges

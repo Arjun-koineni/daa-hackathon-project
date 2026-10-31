@@ -103,15 +103,15 @@ def main():
             num_components = num_components + 1
             dfs_component(i, i, adj, component_label)
 
-    # 2. Source DFS traversal
+    # 2.Source of DFS traversal
     visited = [False] * n
     dfs_traversal = []
     dfs_order(s, adj, visited, dfs_traversal)
 
-    # 3. Source BFS traversal
+    # 3.Source of  BFS traversal
     bfs_traversal, dist, parent = bfs(s, n, adj)
 
-    # Output results
+    # Output Result
     print("COMPONENTS " + str(num_components))
     print("LABELS " + " ".join(str(x) for x in component_label))
     print("DFS " + " ".join(str(x) for x in dfs_traversal))
